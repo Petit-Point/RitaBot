@@ -1,10 +1,11 @@
+/* eslint-disable consistent-return */
 // -----------------
 // Global variables
 // -----------------
 
 // Codebeat:disable[LOC,ABC,BLOCK_NESTING]
-const stripIndent = require("common-tags").stripIndent;
-const oneLine = require("common-tags").oneLine;
+const {stripIndent} = require("common-tags");
+const {oneLine} = require("common-tags");
 const auth = require("./core/auth");
 const logger = require("./core/logger");
 const messageHandler = require("./message");
@@ -12,7 +13,8 @@ const db = require("./core/db");
 // Const setStatus = require("./core/status");
 const react = require("./commands/translation_commands/translate.react");
 const botVersion = require("../package.json").version;
-const botCreator = "Collaboration";
+const botCreator = "Rita Bot Project";
+const joinMessage = require("./commands/info_commands/join");
 
 // ----------
 // Core Code
@@ -47,7 +49,6 @@ exports.listen = function listen (client)
             "maxEmbeds": 5,
             "maxMulti": 6,
             "maxTasksPerChannel": 15,
-            "owner": auth.botOwner,
             "translateCmd": "!translate",
             "translateCmdShort": "!tr",
             "version": botVersion
@@ -56,41 +57,22 @@ exports.listen = function listen (client)
          if (!process.env.DISCORD_BOT_OWNER_ID)
          {
 
-            process.env.DISCORD_BOT_OWNER_ID = [];
+            process.env.DISCORD_BOT_OWNER_ID = "0";
 
          }
 
-         let shard = client.shard;
+         const singleShard = client.options.shardCount;
 
-         if (!shard)
-         {
-
-            shard = {
-               "count": 1,
-               "id": 0
-            };
-
-         }
-
-         if (shard.id === 0)
-         {
-
-            console.log(stripIndent`
-            ----------------------------------------
-            @${client.user.username} Bot is now online
-            V.${config.version} | ID: ${client.user.id}
-            Made by: ${botCreator}
-            ----------------------------------------
-         `);
-
-         }
+         console.log(stripIndent`
+         ----------------------------------------
+         ${client.user.username} Bot is now online
+         V.${config.version} | ID: ${client.user.id}
+         Made by: ${botCreator}
+         ----------------------------------------`);
 
          console.log(oneLine`
-         Shard#${shard.id}:  ${shard.id + 1} / ${shard.count} online -
-         ${client.guilds.cache.size.toLocaleString()} guilds,
-         ${client.channels.cache.size.toLocaleString()} channels,
-         ${client.users.cache.size.toLocaleString()} users
-      `);
+         Shard: #${singleShard} Shards online -
+         ${client.guilds.cache.size.toLocaleString()} guilds.`);
 
          client.user.setPresence({
             "activity": {
@@ -100,36 +82,27 @@ exports.listen = function listen (client)
             "status": "online"
          });
 
-         // ----------------------
-         // All shards are online
-         // ----------------------
+         // ---------------------
+         // Log connection event
+         // ---------------------
 
-         if (shard.id === shard.count - 1)
-         {
-
-            // ---------------------
-            // Log connection event
-            // ---------------------
-
-            console.log(stripIndent`
+         console.log(stripIndent`
             ----------------------------------------
-            All shards are online, running intervals
-            ----------------------------------------
+            All shards online, running DB connection
          `);
 
-            logger(
-               "custom",
-               {
-                  "color": "ok",
-                  "msg": oneLine`
+         logger(
+            "custom",
+            {
+               "color": "ok",
+               "msg": oneLine`
                :wave:  **${client.user.username}**
                is now online - \`v.${botVersion}\` -
-               **${shard.count}** shards
+               **${singleShard}** shards
             `
-               }
-            );
+            }
+         );
 
-         }
 
       }
    );
@@ -161,19 +134,16 @@ exports.listen = function listen (client)
             if (!message.author.bot)
             {
 
-               // console.log(`${auth.messagedebug}`);
-               // console.log(`${process.env.MESSAGE_DEBUG}`);
+               if (auth.messagedebug === "3")
+               {
 
+                  console.log(`MD3: ${message.guild.name} - ${message.guild.id} - ${message.createdAt} \nMesssage User - ${message.author.tag} \nMesssage Content - ${message.content}\n----------------------------------------`);
+
+               }
                if (auth.messagedebug === "1")
                {
 
-                  console.log(`${message.guild.name} - ${message.guild.id} - ${message.createdAt} \nDEBUG: Messsage User - ${message.author.tag} \nDEBUG: Messsage Content - ${message.content}\n----------------------------------------`);
-
-               }
-               if (auth.messagedebug !== "1")
-               {
-
-                  console.log(`${message.guild.name} - ${message.guild.id} - ${message.createdAt}`);
+                  console.log(`MD1: ${message.guild.name} - ${message.guild.id} - ${message.createdAt}`);
 
                }
                const col = "message";
@@ -375,7 +345,17 @@ exports.listen = function listen (client)
             "guildLeave",
             guild
          );
-         db.removeServer(guild.id);
+         db.updateServerTable(guild.id, "active", false, function error (err)
+         {
+
+            if (err)
+            {
+
+               return console.log("error", err, "command", guild.id);
+
+            }
+
+         });
 
       }
    );
@@ -414,7 +394,7 @@ exports.listen = function listen (client)
 
                console.log(`Server: ${guild.id} has a blacklisted status of: ${server[0].blacklisted}`);
                logger(
-                  "custom",
+                  "activity",
                   {
                      "color": "ok",
                      "msg": oneLine`**Server:** ${guild.id} has a blacklisted status of: **${server[0].blacklisted}**`
@@ -425,7 +405,7 @@ exports.listen = function listen (client)
                {
 
                   logger(
-                     "custom",
+                     "activity",
                      {
                         "color": "warn",
                         "msg": oneLine`**Server:** ${guild.id} has been kicked as it is blacklisted`
@@ -438,13 +418,26 @@ exports.listen = function listen (client)
 
             }
 
-         ).catch((err) => console.log(
-            "error",
-            err,
-            "warning",
-            guild.name
-         ));
+         // eslint-disable-next-line no-unused-vars
+         ).catch((err) => console.log("VALIDATION: New Server, No Blacklist History"));
+         db.updateServerTable(guild.id, "active", true, function error (err)
+         {
+
+            if (err)
+            {
+
+               return console.log("error", err, "command", guild.id);
+
+            }
+
+         });
          // console.log(`DEBUG: Blacklist Check Complete`);
+
+         // ---------------------
+         // Send Welcome Message
+         // ---------------------
+
+         joinMessage(guild, config);
 
       }
    );

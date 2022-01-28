@@ -1,13 +1,12 @@
-/* eslint-disable vars-on-top */
 // -----------------
 // Global variables
 // -----------------
 
 // Codebeat:disable[LOC,ABC,BLOCK_NESTING,ARITY]
+/* eslint-disable vars-on-top */
 const db = require("../../core/db");
 const logger = require("../../core/logger");
 const sendMessage = require("../../core/command.send");
-const auth = require("../../core/auth");
 
 // -----------------
 // Webhook Creation
@@ -42,7 +41,7 @@ const debuging = async function debuging (data)
       // console.log(`DEBUG on 1 ${process.env.DISCORD_DEBUG_WEBHOOK_ID}`);
       // Checks if there iS an item in the channels collection that corresponds with the supplied parameters, returns a boolean
       const check = (element) => element.name === "ritabot-debug";
-      Setup:if (webhookIDVar !== process.env.DISCORD_DEBUG_WEBHOOK_ID)
+      Setup: if (webhookIDVar !== process.env.DISCORD_DEBUG_WEBHOOK_ID)
       {
 
          if (process.env.DISCORD_DEBUG_WEBHOOK_ID === undefined || null)
@@ -145,8 +144,10 @@ const debuging = async function debuging (data)
    {
 
       // console.log(`DEBUG: debug variable ${commandVariable1}`);
-      return db.removeWebhook(
+      return db.updateServerTable(
          data.message.channel.guild.id,
+         "webhookactive",
+         false,
          function error (err)
          {
 
@@ -198,14 +199,14 @@ module.exports = function run (data)
    // Command allowed by admins only
    // -------------------------------
 
-   AreDev: if (!process.env.DISCORD_BOT_OWNER_ID.includes(data.message.author.id))
+   Override: if (!data.message.isBotOwner)
    {
 
-      if (auth.devID.includes(data.message.author.id))
+      if (data.message.isDev)
       {
 
          // console.log("DEBUG: Developer ID Confirmed");
-         break AreDev;
+         break Override;
 
       }
 

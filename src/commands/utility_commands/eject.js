@@ -6,7 +6,7 @@
 const db = require("../../core/db");
 const logger = require("../../core/logger");
 const sendMessage = require("../../core/dev.send");
-const oneLine = require("common-tags").oneLine;
+const {oneLine} = require("common-tags");
 
 // ------
 // Eject
@@ -22,10 +22,15 @@ module.exports.eject = async function eject (data)
    // console.log("DEBUG: Eject");
 
    const serverID = data.cmd.num;
-   const target = data.client.guilds.cache.get(serverID);
+   const target = data.message.client.guilds.cache.get(serverID);
+   const owner = await target.members.fetch(target.ownerID);
 
    data.color = "warn";
    data.text = `\`\`\`${serverID} - Server connection terminated\`\`\``;
+
+   const col = "ejectcount";
+   db.increaseServersCount(col, serverID);
+
    if (!target)
    {
 
@@ -38,7 +43,7 @@ module.exports.eject = async function eject (data)
       return sendMessage(data);
 
    }
-   else if (target.owner)
+   else if (owner)
    {
 
       const writeErr = `Rita has been removed from ${target.name} for Abuse. Continued abuse will result in Blacklisting`;
@@ -46,8 +51,8 @@ module.exports.eject = async function eject (data)
       // ----------------------
       // Send message to owner
       // ----------------------
-
-      target.owner.
+      // console.log("DEBUG: Line 54 - Eject.js");
+      owner.
          send(writeErr).
          catch((err) => console.log(
             "error",
@@ -95,7 +100,8 @@ module.exports.warn = async function warn (data)
    // console.log("DEBUG: Warn");
 
    const serverID = data.cmd.num;
-   const target = data.client.guilds.cache.get(serverID);
+   const target = data.message.client.guilds.cache.get(serverID);
+   const owner = await target.members.fetch(target.ownerID);
 
    if (!target)
    {
@@ -105,14 +111,14 @@ module.exports.warn = async function warn (data)
       // ----------------
 
       data.color = "info";
-      data.text = oneLine`\`\`\`Server ID:${serverID}\nServer has already been ejected.\n\`\`\``;
+      data.text = oneLine`\`\`\`Server ID: ${serverID}\nRita is not in this server, Please Blacklist.\n\`\`\``;
       return sendMessage(data);
 
    }
-   else if (target.owner)
+   else if (owner)
    {
 
-      const writeErr = `Hi ${target.owner}, And thank you for deciding to give RITA a try.\n\n` +
+      const writeErr = `Hi ${owner}, And thank you for deciding to give RITA a try.\n\n` +
       `Unfortunately the recent usage of RITA in **${target.name}** server looks a bit suspicious.\n\n` +
       `If you are having technical issues with RITA and you need some help please come and join us\n` +
       `in our support server. If however the current volume of usage continues, we may be forced to\n` +
@@ -125,8 +131,8 @@ module.exports.warn = async function warn (data)
       // ----------------------
       // Send message to owner
       // ----------------------
-
-      target.owner.
+      // console.log("DEBUG: Line 128 - Eject.js");
+      owner.
          send(writeErr).
          catch((err) => console.log(
             "error",
@@ -136,7 +142,7 @@ module.exports.warn = async function warn (data)
          ));
 
    }
-   else if (!target.owner)
+   else if (!owner)
    {
 
       // --------------------------------
@@ -144,13 +150,28 @@ module.exports.warn = async function warn (data)
       // --------------------------------
 
       data.color = "warn";
-      data.text = oneLine`\`\`\`Server:${target.name} \nServer ID:${serverID}\nUnable to warn Owner.\`\`\``;
-      await db.warn(serverID, true).catch((err) => console.log(
-         "error",
-         err,
-         "warning",
-         serverID
-      ));
+      data.text = oneLine`\`\`\`Server: ${target.name} \nServer ID:${serverID}\nUnable to warn Owner.\`\`\``;
+      await db.updateServerTable(
+         serverID,
+         "warn",
+         true,
+         // eslint-disable-next-line consistent-return
+         function error (err)
+         {
+
+            if (err)
+            {
+
+               return console.log("error", err, "warning", serverID);
+
+            }
+
+         }
+      );
+
+      // -------------
+      // Send message
+      // -------------
       return sendMessage(data);
 
    }
@@ -159,13 +180,32 @@ module.exports.warn = async function warn (data)
    // Send message
    // -------------
    data.color = "warn";
-   data.text = `\`\`\`Owner: ${target.owner.user.tag}\nServer: ${target.name} \nServer ID: ${serverID}\nServer Owner Has Been Warned\`\`\``;
-   await db.warn(serverID, true).catch((err) => console.log(
-      "error",
-      err,
-      "warning",
-      serverID
-   ));
+   data.text = `\`\`\`Owner: ${owner.user.username}#${owner.user.discriminator}\nServer: ${target.name} \nServer ID: ${serverID}\nServer Owner Has Been Warned\`\`\``;
+
+   const col = "warncount";
+   db.increaseServersCount(col, serverID);
+
+   await db.updateServerTable(
+      serverID,
+      "warn",
+      true,
+      // eslint-disable-next-line consistent-return
+      function error (err)
+      {
+
+         if (err)
+         {
+
+            return console.log("error", err, "warning", serverID);
+
+         }
+
+      }
+   );
+
+   // -------------
+   // Send message
+   // -------------
    return sendMessage(data);
 
 };
@@ -185,8 +225,9 @@ module.exports.unwarn = function unwarn (data)
 
    const serverID = data.cmd.num;
 
-   return db.warn(
+   return db.updateServerTable(
       serverID,
+      "warn",
       false,
       function error (err)
       {

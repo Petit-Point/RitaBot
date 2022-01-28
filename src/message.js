@@ -8,19 +8,17 @@
 const db = require("./core/db");
 const fn = require("./core/helpers");
 const cmdArgs = require("./commands/args");
-
+const auth = require("./core/auth");
 
 // --------------------
 // Listen for messages
 // --------------------
 
 // eslint-disable-next-line no-unused-vars
-module.exports = function run (config, message)
+module.exports = async function run (config, message)
 {
 
    module.exports.message = message;
-   const client = message.client;
-   const bot = client.user;
    if (message.channel.type === "dm" || message.type !== "DEFAULT")
    {
 
@@ -143,12 +141,20 @@ module.exports = function run (config, message)
       message.isAdmin =
          message.member.permissions.has("ADMINISTRATOR");
 
-      message.isManager =
+      message.isGlobalChanManager =
+         message.member.permissions.has("MANAGE_CHANNELS");
+
+      message.isChanManager =
          fn.checkPerm(
             message.member,
             message.channel,
             "MANAGE_CHANNELS"
          );
+      message.isDev = auth.devID.includes(message.author.id);
+      message.isBotOwner = auth.botOwner.includes(message.author.id);
+      message.sourceID = message.guild.id;
+      // eslint-disable-next-line no-self-assign
+      message.guild.owner = await message.guild.members.fetch(message.guild.ownerID);
 
       // Add role color
       message.roleColor = fn.getRoleColor(message.member);
@@ -163,9 +169,7 @@ module.exports = function run (config, message)
       "canWrite": true,
       "channel": message.channel,
       config,
-      client,
       "member": message.member,
-      bot,
       message
    };
    if (data.message.channel.type !== "dm")
@@ -196,13 +200,21 @@ module.exports = function run (config, message)
       function getServerInfo (server)
       {
 
+         if (server.length === 0)
+         {
+
+            return;
+
+         }
+
          if (server[0].blacklisted === true)
          {
 
-            data.message.guild.leave();
             console.log(`Blacklist Redundancy, Server ${serverID} ejected`);
+            data.message.guild.leave();
 
          }
+         message.server = server;
 
       }
    ).catch((err) =>
@@ -228,6 +240,12 @@ module.exports = function run (config, message)
       if (message.content.startsWith(config.translateCmd) || message.content.startsWith(config.translateCmdShort) || message.content.startsWith(`<@${message.client.user.id}>`) || message.content.startsWith(`<@!${message.client.user.id}>`))
       {
 
+         if (auth.messagedebug === "5")
+         {
+
+            console.log(`MD5: ${message.guild.name} - ${message.guild.id} - ${message.createdAt}\nMesssage User - ${message.author.tag} \nMesssage Content - ${message.content}\n----------------------------------------`);
+
+         }
          // eslint-disable-next-line consistent-return
          return cmdArgs(data);
 

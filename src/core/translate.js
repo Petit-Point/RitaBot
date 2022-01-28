@@ -1,4 +1,3 @@
-
 // -----------------
 // Global variables
 // -----------------
@@ -9,6 +8,7 @@ const translate = require("rita-google-translate-api");
 const db = require("./db");
 const botSend = require("./send");
 const fn = require("./helpers");
+const auth = require("../core/auth");
 
 // ------------------------------------------
 // Fix broken Discord tags after translation
@@ -27,11 +27,15 @@ function discordPatch (string)
    let match = string.match(/<.*?>/gmiu);
    let everyonePing = string.match(/@everyone|@here/giu);
    let urlMatch = string.match(urlRegex);
+   let codeMatch = string.match(/`[^`]+`/g);
+   let bigBlock = string.match(/```[^`]+```/g);
 
-   const regexFix = string.replace(/<.*?>/gmiu, "<>").
+   let regexFix = string.replace(/<.*?>/gmiu, "<>").
       replace(urlRegex, "{}").
       replace(/@everyone/g, "[]").
-      replace(/@here/g, "[]");
+      replace(/@here/g, "[]").
+      replace(/（/g, "(").
+      replace(/）/g, ")");
    if (!urlMatch)
    {
 
@@ -76,6 +80,40 @@ function discordPatch (string)
 
 
    }
+
+   if (!codeMatch)
+   {
+
+      codeMatch = [];
+
+   }
+   if (!bigBlock)
+   {
+
+      bigBlock = [];
+
+   }
+
+   for (let i = 0; bigBlock.length > i; i += 1)
+   {
+
+      let string = bigBlock[i];
+      string = string.replace(/`/g, "");
+      const searchString = codeMatch[i];
+
+      if (string === searchString.replace(/`/g, ""))
+      {
+
+         codeMatch.splice(i, 1);
+         // removes the false match from array cause im too annoyed to find a correct regexp solution
+         regexFix = regexFix.replace(bigBlock[i], ")(");
+
+      }
+
+
+   }
+   regexFix = regexFix.replace(/`[^`]+`/g, "()");
+
    const result = {
       match,
       "text": regexFix,
@@ -83,14 +121,18 @@ function discordPatch (string)
       "original": string,
       "url": urlMatch,
       // eslint-disable-next-line sort-keys
-      "memberPing": everyonePing
+      "memberPing": everyonePing,
+      // eslint-disable-next-line sort-keys
+      "code": {
+         "one": codeMatch,
+         "three": bigBlock
+      }
 
 
    };
    return result;
 
 }
-
 
 function translateFix (string, matches)
 {
@@ -115,13 +157,26 @@ function translateFix (string, matches)
       text = text.replace(/\[\s*?\]/i, obj);
 
    }
+   for (const obj of matches.code.one)
+   {
+
+      text = text.replace(/\(\s*?\)/, obj);
+
+   }
+   for (const obj of matches.code.three)
+   {
+
+      text = text.replace(/\)\s*?\(/, obj);
+
+   }
    return text;
 
 
 }
-// ------------
+// ---------------------------------------------------------------------------
 // Retranslation function using auto if it thinks it is in the wrong language
-// ------------
+// ---------------------------------------------------------------------------
+
 async function reTranslate (matches, opts)
 {
 
@@ -147,20 +202,19 @@ function getUserColor (data, callback)
    const fw = data.forward;
    const txt = data.text;
    const ft = data.footer;
-   const usr = data.author;
+   const usr = data.message.author;
    const msg = data.message;
 
    data.forward = fw;
    data.text = txt;
    data.footer = ft;
-   data.author = usr;
+   data.message.author = usr;
    data.message = msg;
 
 
    callback(data);
 
 }
-
 
 // --------------------------
 // Translate buffered chains
@@ -178,21 +232,22 @@ function bufferSend (arr, data)
 
       data.text = msg.text;
       data.color = msg.color;
-      data.author = msg.author;
+      data.message.author = msg.author;
       data.showAuthor = true;
       data.message = msg;
 
       // -------------
       // Send message
       // -------------
-
+      console.log(`Transalte 1`);
       botSend(data);
 
    });
 
 }
 
-function bufferChains (data, from)
+// eslint-disable-next-line no-unused-vars
+function bufferChains (data, from, guild)
 {
 
    const translatedChains = [];
@@ -242,7 +297,7 @@ function bufferChains (data, from)
             {
 
                translatedChains.push({
-                  "author": gotData.author,
+                  "author": gotData.message.author,
                   "color": gotData.color,
                   "text": output,
                   "time": chain.time
@@ -303,7 +358,7 @@ function updateServerStats (message)
       id = message.channel.guild.id;
 
    }
-   db.increaseServersCount(id);
+   db.increaseServersCount("count", id);
    db.increaseStatsCount(col, id);
 
 }
@@ -314,12 +369,6 @@ function updateServerStats (message)
 
 module.exports = function run (data) // eslint-disable-line complexity
 {
-
-   // -------------------
-   // Get message author
-   // -------------------
-
-   data.author = data.message.author;
 
    // -------------------------
    // Report invalid languages
@@ -467,7 +516,7 @@ module.exports = function run (data) // eslint-disable-line complexity
             {
 
                data.text = this.text;
-               data.color = data.message.roleColor;
+               data.color = data.member.displayColor;
                data.showAuthor = true;
                getUserColor(
                   data,
@@ -567,7 +616,21 @@ module.exports = function run (data) // eslint-disable-line complexity
          // Language you set when setting up !t channel command
          const channelFrom = from;
 
-         if (detectedLang === langTo || detectedLang !== channelFrom && channelFrom !== "auto")
+         if (detectedLang === langTo && res.text === data.message.content)
+         {
+
+            if (data.message.client.channels.cache.get(data.forward).guild.id === data.message.client.channels.cache.get(data.message.channel.id).guild.id)
+            {
+
+               // console.log("DEBUG: Cross Server Checker - Same Server, Same language");
+               return;
+
+            }
+
+            // console.log("DEBUG: Cross Server Checker - Diffrent Server, Same language");
+
+         }
+         else if (detectedLang !== channelFrom && channelFrom !== "auto")
          {
 
             // eslint-disable-next-line require-atomic-updates
@@ -576,13 +639,37 @@ module.exports = function run (data) // eslint-disable-line complexity
 
          }
 
-
          updateServerStats(data.message);
          data.forward = fw;
          data.footer = ft;
-         data.color = data.message.roleColor;
+         data.color = data.member.displayColor;
          data.text = res.text;
          data.showAuthor = true;
+         data.detectedLang = detectedLang;
+         if (auth.messagedebug === "4")
+         {
+
+            console.log(`MD4: ${data.message.guild.name} - ${data.message.guild.id} - ${data.message.createdAt}\nMesssage User - ${data.message.author.tag}\nMesssage Content - ${data.message.content}\nTranslated from: ${detectedLang} to: ${langTo}\n----------------------------------------`);
+
+         }
+         if (auth.messagedebug === "2")
+         {
+
+            console.log(`MD2: ${data.message.guild.name} - ${data.message.guild.id} - ${data.message.createdAt}`);
+
+         }
+         if (data.footer)
+
+         {
+
+            if (data.message.server[0].langdetect === true)
+            {
+
+               data.footer.text += `\nSource Language: ${detectedLang}`;
+
+            }
+
+         }
          return getUserColor(
             data,
             botSend

@@ -12,29 +12,34 @@ const fn = require("../core/helpers");
 // Commands
 // ---------
 
-const cmdHelp = require("./utility_commands/help");
-const cmdList = require("./info_commands/list");
-const cmdStats = require("./info_commands/stats");
-const cmdVersion = require("./info_commands/version");
-const cmdEmbed = require("./settings_commands/embed");
+const cmdAnnounce = require("./settings_commands/announce");
+const cmdBlacklist = require("./utility_commands/blacklist");
 const cmdBot2bot = require("./settings_commands/bot2bot");
+const cmdCheck = require("./utility_commands/check");
+const cmdCL = require("./info_commands/changelog");
+const cmdCreate = require("./utility_commands/create.channel");
+const cmdDebug = require("./settings_commands/debug");
+const cmdDocs = require("./info_commands/docs");
 const cmdDonate = require("./utility_commands/donate");
+const cmdEject = require("./utility_commands/eject");
+const cmdEmbed = require("./settings_commands/embed");
+const cmdHelp = require("./utility_commands/help");
+const cmdHistory = require("./info_commands/history");
+const cmdInvite = require("./utility_commands/invite");
+const cmdJoin = require("./info_commands/join");
+const cmdList = require("./info_commands/list");
+const cmdMod = require("./future_commands/mod");
 const cmdMisc = require("./info_commands/misc");
+const cmdPrefix = require("./settings_commands/prefix");
+const cmdReact = require("./settings_commands/react");
 const cmdSettings = require("./settings_commands/settings");
+const cmdStats = require("./info_commands/stats");
 const cmdTranslateLast = require("./translation_commands/translate.last");
 const cmdTranslateThis = require("./translation_commands/translate.this");
 const cmdTranslateAuto = require("./translation_commands/translate.auto");
 const cmdTranslateStop = require("./translation_commands/translate.stop");
 const cmdTranslateTasks = require("./translation_commands/translate.tasks");
-const cmdDebug = require("./settings_commands/debug");
-const cmdPrefix = require("./settings_commands/prefix");
-const cmdCreate = require("./utility_commands/create.channel");
-const cmdMod = require("./future_commands/mod.js");
-const cmdHistory = require("./info_commands/history.js");
-const cmdEject = require("./utility_commands/eject.js");
-const cmdBlacklist = require("./utility_commands/blacklist.js");
-const cmdPerms = require("./utility_commands/perm.js");
-const cmdCheck = require("./utility_commands/check.js");
+const cmdVersion = require("./info_commands/version");
 
 
 // ---------------------------------------
@@ -208,7 +213,7 @@ module.exports = function run (data)
       "main": stripPrefix(
          data.message,
          data.config,
-         data.bot
+         data.message.client.user
       ).trim(),
       "params": null
    };
@@ -228,7 +233,7 @@ module.exports = function run (data)
 
    }
 
-   if (output.main === `${data.bot}`)
+   if (output.main === `${data.message.client.user}`)
    {
 
       output.main = "help";
@@ -252,7 +257,7 @@ module.exports = function run (data)
    output.for = extractParam(
       "for",
       output.params,
-      ["me"],
+      ["invalid"],
       true
    );
 
@@ -286,7 +291,7 @@ module.exports = function run (data)
          {
 
             // console.log(`${output.server[0].blacklisted}`);
-            data.client.guilds.cache.get(id).leave();
+            data.message.client.guilds.cache.get(id).leave();
             console.log(`Self Kicked on command use due to blacklisted`);
 
          }
@@ -346,14 +351,17 @@ module.exports = function run (data)
          // ---------------
 
          const cmdMap = {
+            "announce": cmdAnnounce,
             "auto": cmdTranslateAuto,
             "ban": cmdMod.ban,
             "blacklist": cmdBlacklist.blacklist,
             "bot2bot": cmdBot2bot,
             "check": cmdCheck,
-            "checkperms": cmdPerms,
+            "cl": cmdCL,
             "create": cmdCreate,
             "debug": cmdDebug,
+            "delmsg": cmdMod.deleteid,
+            "docs": cmdDocs,
             "donate": cmdDonate,
             "eject": cmdEject.eject,
             "embed": cmdEmbed,
@@ -361,12 +369,15 @@ module.exports = function run (data)
             "history": cmdHistory,
             "id": cmdMisc.ident,
             "info": cmdHelp,
-            "invite": cmdMisc.invite,
+            "invite": cmdInvite,
+            "kick": cmdMod.kick,
             "last": cmdTranslateLast.run,
             "list": cmdList,
             "mute": cmdMod.mute,
+            "newbot": cmdJoin.newBot,
             "prefix": cmdPrefix,
             "proc": cmdMisc.proc,
+            "react": cmdReact,
             "settings": cmdSettings,
             "shards": cmdMisc.shards,
             "stats": cmdStats,
@@ -378,6 +389,7 @@ module.exports = function run (data)
             "unmute": cmdMod.unmute,
             "unwarn": cmdEject.unwarn,
             "update": cmdMisc.update,
+            "updatelink": cmdMisc.updatelink,
             "version": cmdVersion,
             "warn": cmdEject.warn
          };

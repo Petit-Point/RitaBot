@@ -6,13 +6,13 @@
 const db = require("../../core/db");
 const logger = require("../../core/logger");
 const sendMessage = require("../../core/dev.send");
-const oneLine = require("common-tags").oneLine;
+const {oneLine} = require("common-tags");
 
 // ----------
 // Blacklist
 // ----------
 
-module.exports.blacklist = function blacklist (data)
+module.exports.blacklist = async function blacklist (data)
 {
 
    // -------------
@@ -22,11 +22,59 @@ module.exports.blacklist = function blacklist (data)
    // console.log("DEBUG: Blacklist");
 
    const serverID = data.cmd.num;
+   const target = data.message.client.guilds.cache.get(serverID);
+   if (!target)
+   {
 
-   return db.blacklist(
+      data.color = "warn";
+      data.text = oneLine`${`:regional_indicator_x:  **${serverID} Blacklisted**\n`}`;
+
+   }
+   else if (target.owner)
+   {
+
+      const owner = await target.members.fetch(target.ownerID);
+      data.color = "warn";
+      data.text = `${`:regional_indicator_x:  **${target.name} Blacklisted**\nThe server owner has been notified\n` +
+      "```md\n> "}${target.id}\n@${owner.user.tag}\n${target.memberCount} members\n\`\`\``;
+      data.title = "Server Blacklisted";
+
+      const writeErr = `One of your server's - ${target.name} has been Blacklisted. If you wish to appeal then please join our discord server and speak to an admin: https://discord.gg/mgNR64R`;
+
+      // ----------------------
+      // Send message to owner
+      // ----------------------
+      // console.log("DEBUG: Line 47 - Blacklist.js");
+      owner.
+         send(writeErr).
+         catch((err) => console.log(
+            "error",
+            err,
+            "warning",
+            target.name
+         ));
+      console.log(`${serverID}`);
+      await target.leave();
+
+   }
+   else
+   {
+
+      data.color = "warn";
+      data.text = `${`:regional_indicator_x:  **${target.name} Blacklisted**\nUnable to notify the server owner\n` +
+      "```md\n> "}${target.id}\n${target.memberCount} members\n\`\`\``;
+      data.title = "Server Blacklisted";
+      await target.leave();
+
+
+   }
+
+   await db.updateServerTable(
       serverID,
+      "blacklisted",
       true,
-      async function error (err)
+      // eslint-disable-next-line consistent-return
+      function error (err)
       {
 
          if (err)
@@ -36,62 +84,13 @@ module.exports.blacklist = function blacklist (data)
 
          }
 
-
-         const target = data.client.guilds.cache.get(serverID);
-         if (!target)
-         {
-
-            data.color = "warn";
-            data.text = oneLine`${`:regional_indicator_x:  **${serverID} Blacklisted**\n`}`;
-
-         }
-         else if (target.owner)
-         {
-
-            data.color = "warn";
-            data.text = `${`:regional_indicator_x:  **${target.name} Blacklisted**\nThe server owner has been notified\n` +
-            "```md\n> "}${target.id}\n@${target.owner.user.username}#${
-               target.owner.user.discriminator}\n${target.memberCount} members\n\`\`\``;
-            data.title = "Server Blacklisted";
-
-            const writeErr = `One of your server's - ${target.name} has been Blacklisted. If you wish to appeal then please join our discord server and speak to an admin: https://discord.gg/mgNR64R`;
-
-            // ----------------------
-            // Send message to owner
-            // ----------------------
-
-            target.owner.
-               send(writeErr).
-               catch((err) => console.log(
-                  "error",
-                  err,
-                  "warning",
-                  target.name
-               ));
-            console.log(`${serverID}`);
-            await target.leave();
-
-         }
-         else
-         {
-
-            data.color = "warn";
-            data.text = `${`:regional_indicator_x:  **${target.name} Blacklisted**\nUnable to notify the server owner\n` +
-            "```md\n> "}${target.id}\n${target.memberCount} members\n\`\`\``;
-            data.title = "Server Blacklisted";
-            await target.leave();
-
-
-         }
-
-         // -------------
-         // Send message
-         // -------------
-
-         return sendMessage(data);
-
       }
    );
+
+   // -------------
+   // Send message
+   // -------------
+   return sendMessage(data);
 
 };
 
@@ -110,8 +109,9 @@ module.exports.unblacklist = function unblacklist (data)
 
    const serverID = data.cmd.num;
 
-   return db.blacklist(
+   return db.updateServerTable(
       serverID,
+      "blacklisted",
       false,
       function error (err)
       {
